@@ -15,8 +15,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Clock, User, Mic } from "lucide-react";
+import { Calendar, Clock, User, Mic, Link as LinkIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { registerForEvent } from "@/app/actions";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -26,8 +31,36 @@ const formSchema = z.object({
   }),
 });
 
+interface EventDetails {
+  topic: string;
+  meetLink: string;
+}
+
 export default function EventSection() {
   const { toast } = useToast();
+  const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchEventDetails() {
+      try {
+        const eventDocRef = doc(db, "event", "details");
+        const docSnap = await getDoc(eventDocRef);
+        if (docSnap.exists()) {
+          setEventDetails(docSnap.data() as EventDetails);
+        } else {
+          setEventDetails({ topic: "The Rise of Quantum Computing", meetLink: "" });
+        }
+      } catch (error) {
+        console.error("Error fetching event details:", error);
+        setEventDetails({ topic: "The Rise of Quantum Computing", meetLink: "" });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEventDetails();
+  }, []);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -37,13 +70,21 @@ export default function EventSection() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: "Registration Successful!",
-      description: `Thank you for registering, ${values.name}. See you at the event!`,
-    });
-    form.reset();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    const result = await registerForEvent(values);
+    if (result.success) {
+      toast({
+        title: "Registration Successful!",
+        description: `Thank you for registering, ${values.name}. See you at the event!`,
+      });
+      form.reset();
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: result.message,
+      });
+    }
   }
 
   return (
@@ -59,7 +100,7 @@ export default function EventSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="font-headline text-2xl">The Rise of Quantum Computing</CardTitle>
+              {loading ? <Skeleton className="h-8 w-3/4" /> : <CardTitle className="font-headline text-2xl">{eventDetails?.topic}</CardTitle>}
               <CardDescription>A deep dive into how quantum computers could revolutionize our world.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -83,6 +124,13 @@ export default function EventSection() {
                     <span className="font-medium">Mode:</span>
                     <span>Online (Google Meet)</span>
                 </div>
+                 {eventDetails?.meetLink && (
+                  <div className="flex items-center gap-3">
+                      <LinkIcon className="w-5 h-5 text-muted-foreground" />
+                      <span className="font-medium">Link:</span>
+                      <a href={eventDetails.meetLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{eventDetails.meetLink}</a>
+                  </div>
+                )}
             </CardContent>
             <CardFooter>
                  <p className="text-sm text-muted-foreground">Meeting link will be shared with registered participants.</p>

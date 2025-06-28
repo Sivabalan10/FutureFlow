@@ -8,7 +8,6 @@ export default function Header() {
     { name: "About", href: "#about" },
     { name: "Events", href: "#events" },
     { name: "Suggest Topics", href: "#suggest" },
-    { name: "Admin", href: "/admin_2003" },
   ];
 
   return (
